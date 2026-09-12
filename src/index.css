@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8f9fc;
+    color: #0f172a;
+  }
+}
+
+.font-editorial {
+  font-family: 'Syne', sans-serif;
+}
+
+.font-serif-lux {
+  font-family: 'Italiana', serif;
+}
+
+/* Vibrant bright fashion gradients */
+.bright-gradient-text {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.warm-gradient-text {
+  background: linear-gradient(135deg, #f97316 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bright-glow {
+  box-shadow: 0 10px 30px -5px rgba(236, 72, 153, 0.25);
+}
+
+.blue-glow {
+  box-shadow: 0 10px 30px -5px rgba(59, 130, 246, 0.25);
+}
+
+/* Bright Glassmorphism cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+}
+
+.glass-card-elevated {
+  background: #ffffff;
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  box-shadow: 0 20px 40px -10px rgba(236, 72, 153, 0.12), 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ec4899;
+}
