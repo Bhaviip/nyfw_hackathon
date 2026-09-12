@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Video } from "@vonage/video";
+import { Auth } from "@vonage/auth";
 import { generateOutfitStyles, analyzeWardrobeItem, generateOutfitReview } from "./gemini.js";
 
 dotenv.config();
@@ -11,6 +13,32 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_FILE = path.join(__dirname, "..", "data", "outfits.json");
+
+// Initialize Vonage Video API client
+let vonageVideo = null;
+const vonageAppId = process.env.VONAGE_APPLICATION_ID || "e19566a8-75fb-4e14-beb1-52f2d5eba4e7";
+let privateKey = "";
+try {
+  const pkPath = path.join(__dirname, "..", "vonage_private.key");
+  if (fs.existsSync(pkPath)) {
+    privateKey = fs.readFileSync(pkPath, "utf-8");
+  }
+} catch (e) {}
+
+if (process.env.VONAGE_API_KEY && process.env.VONAGE_API_SECRET && privateKey) {
+  try {
+    const auth = new Auth({
+      apiKey: process.env.VONAGE_API_KEY,
+      apiSecret: process.env.VONAGE_API_SECRET,
+      applicationId: vonageAppId,
+      privateKey
+    });
+    vonageVideo = new Video(auth);
+    console.log("Vonage Video API Client ready");
+  } catch (err) {
+    console.error("Vonage Video initialization error:", err);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +75,25 @@ function saveOutfits(outfits) {
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Vonage Video Session & Client Token Generator
+app.get("/api/vonage/session", async (req, res) => {
+  try {
+    if (!vonageVideo) {
+      return res.status(503).json({ error: "Vonage Video client not initialized" });
+    }
+    const session = await vonageVideo.createSession();
+    const token = vonageVideo.generateClientToken(session.sessionId);
+    res.json({
+      applicationId: vonageAppId,
+      sessionId: session.sessionId,
+      token
+    });
+  } catch (err) {
+    console.error("Failed to generate Vonage Video session:", err);
+    res.status(500).json({ error: "Failed to generate Vonage session", message: err.message });
+  }
 });
 
 // 1. Generate Styles from Gemini

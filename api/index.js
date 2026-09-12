@@ -1,9 +1,41 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { Video } from "@vonage/video";
+import { Auth } from "@vonage/auth";
 import { generateOutfitStyles, analyzeWardrobeItem, generateOutfitReview } from "../server/gemini.js";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let vonageVideo = null;
+const vonageAppId = process.env.VONAGE_APPLICATION_ID || "e19566a8-75fb-4e14-beb1-52f2d5eba4e7";
+let privateKey = process.env.VONAGE_PRIVATE_KEY || "";
+try {
+  const pkPath = path.join(__dirname, "..", "vonage_private.key");
+  if (fs.existsSync(pkPath)) {
+    privateKey = fs.readFileSync(pkPath, "utf-8");
+  }
+} catch (e) {}
+
+if (process.env.VONAGE_API_KEY && process.env.VONAGE_API_SECRET && privateKey) {
+  try {
+    const auth = new Auth({
+      apiKey: process.env.VONAGE_API_KEY,
+      apiSecret: process.env.VONAGE_API_SECRET,
+      applicationId: vonageAppId,
+      privateKey
+    });
+    vonageVideo = new Video(auth);
+  } catch (err) {
+    console.error("Vercel Vonage Video init error:", err);
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -15,6 +47,24 @@ let inMemoryOutfits = [];
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString(), platform: "vercel" });
+});
+
+app.get("/api/vonage/session", async (req, res) => {
+  try {
+    if (!vonageVideo) {
+      return res.status(503).json({ error: "Vonage Video client not configured" });
+    }
+    const session = await vonageVideo.createSession();
+    const token = vonageVideo.generateClientToken(session.sessionId);
+    res.json({
+      applicationId: vonageAppId,
+      sessionId: session.sessionId,
+      token
+    });
+  } catch (err) {
+    console.error("Vercel Vonage session error:", err);
+    res.status(500).json({ error: "Failed to create Vonage Video session", message: err.message });
+  }
 });
 
 app.post("/api/styles", async (req, res) => {

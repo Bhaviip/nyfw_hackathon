@@ -13,25 +13,58 @@ if (apiKey) {
   }
 }
 
-// Curated high-fashion Pinterest-style moodboard imagery library
-const AESTHETIC_IMAGES = [
-  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1581044777550-4cfa60707c03?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1508427953056-b00b8d78ebf5?w=600&auto=format&fit=crop&q=80"
-];
+// Curated Pinterest Aesthetic Image Directory matching specific outfit styles
+const PINTEREST_AESTHETICS = {
+  blazer_tailoring: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80",
+  streetwear_leather: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=80",
+  silk_slip: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80",
+  knitwear_layer: "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&auto=format&fit=crop&q=80",
+  casual_denim: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80",
+  cocktail_glam: "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=800&auto=format&fit=crop&q=80",
+  avant_garde: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&auto=format&fit=crop&q=80",
+  trench_coat: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=800&auto=format&fit=crop&q=80",
+  y2k_cyber: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=800&auto=format&fit=crop&q=80",
+  monochrome_suit: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&auto=format&fit=crop&q=80",
+};
 
-function getAestheticImage(index = 0, styleTitle = "") {
-  const hash = styleTitle.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const imgIdx = (hash + index) % AESTHETIC_IMAGES.length;
-  return AESTHETIC_IMAGES[imgIdx];
+export function matchPinterestImage(style = {}) {
+  // If Gemini provided a matching category
+  if (style.imageAestheticType && PINTEREST_AESTHETICS[style.imageAestheticType]) {
+    return PINTEREST_AESTHETICS[style.imageAestheticType];
+  }
+
+  // Semantic matching based on title, description, and key pieces
+  const text = `${style.title || ""} ${style.tagline || ""} ${style.simpleDescription || ""} ${JSON.stringify(style.keyPieces || [])}`.toLowerCase();
+
+  if (text.includes("leather") || text.includes("biker") || text.includes("bomber") || text.includes("moto")) {
+    return PINTEREST_AESTHETICS.streetwear_leather;
+  }
+  if (text.includes("slip") || text.includes("satin") || text.includes("silk dress") || text.includes("cami")) {
+    return PINTEREST_AESTHETICS.silk_slip;
+  }
+  if (text.includes("knit") || text.includes("sweater") || text.includes("cardigan") || text.includes("cashmere")) {
+    return PINTEREST_AESTHETICS.knitwear_layer;
+  }
+  if (text.includes("trench") || text.includes("overcoat") || text.includes("parisian")) {
+    return PINTEREST_AESTHETICS.trench_coat;
+  }
+  if (text.includes("cyber") || text.includes("metallic") || text.includes("y2k") || text.includes("futuristic")) {
+    return PINTEREST_AESTHETICS.y2k_cyber;
+  }
+  if (text.includes("cocktail") || text.includes("gala") || text.includes("glam") || text.includes("heels")) {
+    return PINTEREST_AESTHETICS.cocktail_glam;
+  }
+  if (text.includes("denim") || text.includes("jeans") || text.includes("sneakers")) {
+    return PINTEREST_AESTHETICS.casual_denim;
+  }
+  if (text.includes("avant-garde") || text.includes("architectural") || text.includes("sculptural")) {
+    return PINTEREST_AESTHETICS.avant_garde;
+  }
+  if (text.includes("monochrome") || text.includes("black suit") || text.includes("obsidian")) {
+    return PINTEREST_AESTHETICS.monochrome_suit;
+  }
+  // Default to clean blazer tailoring
+  return PINTEREST_AESTHETICS.blazer_tailoring;
 }
 
 /**
@@ -117,7 +150,7 @@ Respond ONLY with valid JSON strictly conforming to this schema:
             ...s,
             id: s.id || `style_${Date.now()}_${idx}`,
             vibeDescription: s.simpleDescription || s.vibeDescription,
-            imageUrl: getAestheticImage(idx, s.title),
+            imageUrl: matchPinterestImage(s),
             pinterestUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(pinterestQuery)}`,
           };
         });
@@ -282,7 +315,7 @@ function getCuratedPinterestStyles(occasion, gender, age, preferences = "") {
       tagline: "Sleek, polished, and effortless Pinterest vibes.",
       vibeDescription: `A crisp, elevated aesthetic with clean tailoring and neutral tones. Comfortable, modern, and perfectly suited for ${occasion}.`,
       simpleDescription: `A crisp, elevated aesthetic with clean tailoring and neutral tones. Comfortable, modern, and perfectly suited for ${occasion}.`,
-      imageUrl: AESTHETIC_IMAGES[0],
+      imageUrl: PINTEREST_AESTHETICS.blazer_tailoring,
       pinterestUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent("clean girl aesthetic outfit pinterest " + occasion)}`,
       colorPalette: ["#2563EB Cobalt Blue", "#FFFFFF Crisp White", "#D97706 Warm Amber"],
       keyPieces: [
@@ -313,7 +346,7 @@ function getCuratedPinterestStyles(occasion, gender, age, preferences = "") {
       tagline: "Cool-girl energy with an edgy modern twist.",
       vibeDescription: `Inspired by viral Pinterest street-style boards. Balances a statement jacket with relaxed basics for a confident look.`,
       simpleDescription: `Inspired by viral Pinterest street-style boards. Balances a statement jacket with relaxed basics for a confident look.`,
-      imageUrl: AESTHETIC_IMAGES[1],
+      imageUrl: PINTEREST_AESTHETICS.streetwear_leather,
       pinterestUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent("downtown street style leather outfit pinterest " + occasion)}`,
       colorPalette: ["#E11D48 Electric Fuchsia", "#0F172A Deep Slate", "#F59E0B Bright Sun"],
       keyPieces: [
@@ -344,7 +377,7 @@ function getCuratedPinterestStyles(occasion, gender, age, preferences = "") {
       tagline: "Soft luxury and chic fluid silhouettes.",
       vibeDescription: `A popular Pinterest aesthetic pairing flowing silks with cozy structured knits. Chic, comfortable, and eye-catching.`,
       simpleDescription: `A popular Pinterest aesthetic pairing flowing silks with cozy structured knits. Chic, comfortable, and eye-catching.`,
-      imageUrl: AESTHETIC_IMAGES[2],
+      imageUrl: PINTEREST_AESTHETICS.silk_slip,
       pinterestUrl: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent("slip dress knitwear layered outfit pinterest " + occasion)}`,
       colorPalette: ["#8B5CF6 Electric Violet", "#10B981 Vivid Emerald", "#F8FAFC Pure Ice"],
       keyPieces: [

@@ -20,6 +20,9 @@ export default function CameraScannerScreen({
   onBackToStyles
 }) {
   const videoRef = useRef(null);
+  const vonageContainerRef = useRef(null);
+  const vonageSessionRef = useRef(null);
+  const vonagePublisherRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -27,6 +30,7 @@ export default function CameraScannerScreen({
 
   const [cameraStream, setCameraStream] = useState(null);
   const [facingMode, setFacingMode] = useState("environment");
+  const [isVonageActive, setIsVonageActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
 
@@ -40,14 +44,89 @@ export default function CameraScannerScreen({
   // Early completion confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // Initialize camera with Vonage Video API (with WebRTC fallback)
   useEffect(() => {
-    startCamera();
+    let isMounted = true;
+
+    async function setupVonageVideo() {
+      try {
+        const res = await fetch("/api/vonage/session");
+        if (!res.ok) throw new Error("Vonage session endpoint not available");
+        const data = await res.json();
+        
+        if (window.OT && window.OT.checkSystemRequirements && window.OT.checkSystemRequirements() && isMounted) {
+          // Clean existing sessions if any
+          if (vonageSessionRef.current) {
+            try { vonageSessionRef.current.disconnect(); } catch (e) {}
+          }
+          if (vonagePublisherRef.current) {
+            try { vonagePublisherRef.current.destroy(); } catch (e) {}
+          }
+
+          const session = window.OT.initSession(data.applicationId, data.sessionId);
+          vonageSessionRef.current = session;
+
+          if (vonageContainerRef.current) {
+            vonageContainerRef.current.innerHTML = "";
+          }
+
+          const publisher = window.OT.initPublisher(
+            vonageContainerRef.current,
+            {
+              insertMode: "append",
+              width: "100%",
+              height: "100%",
+              resolution: "1280x720",
+              showControls: false,
+              facingMode: facingMode === "environment" ? "environment" : "user",
+              name: "Vonage Wardrobe Scanner",
+              fitMode: "cover",
+            },
+            (err) => {
+              if (err) {
+                console.warn("Vonage publisher init error, trying standard camera:", err);
+                startFallbackCamera();
+              } else if (isMounted) {
+                setIsVonageActive(true);
+                setCameraError(null);
+              }
+            }
+          );
+          vonagePublisherRef.current = publisher;
+
+          session.connect(data.token, (err) => {
+            if (!err && isMounted) {
+              try {
+                session.publish(publisher);
+              } catch (e) {}
+            }
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn("Vonage Video setup error, switching to standard camera:", err);
+      }
+      
+      if (isMounted) {
+        startFallbackCamera();
+      }
+    }
+
+    setupVonageVideo();
+
     return () => {
+      isMounted = false;
+      if (vonageSessionRef.current) {
+        try { vonageSessionRef.current.disconnect(); } catch (e) {}
+      }
+      if (vonagePublisherRef.current) {
+        try { vonagePublisherRef.current.destroy(); } catch (e) {}
+      }
       stopCamera();
     };
   }, [facingMode]);
 
-  const startCamera = async () => {
+  const startFallbackCamera = async () => {
     stopCamera();
     setCameraError(null);
     try {
@@ -65,8 +144,8 @@ export default function CameraScannerScreen({
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.warn("Camera access failed or unavailable:", err);
-      setCameraError("Camera unavailable or permission denied. You can take photos with your phone camera or upload below!");
+      console.warn("Standard camera access failed or unavailable:", err);
+      setCameraError("Camera stream unavailable. You can take photos with your phone camera or upload below!");
     }
   };
 
@@ -78,7 +157,12 @@ export default function CameraScannerScreen({
   };
 
   const toggleFacingMode = () => {
-    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+    if (vonagePublisherRef.current && typeof vonagePublisherRef.current.cycleVideo === "function") {
+      vonagePublisherRef.current.cycleVideo();
+      setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+    } else {
+      setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+    }
   };
 
   const requiredCategories = (style.keyPieces || [])
@@ -90,14 +174,32 @@ export default function CameraScannerScreen({
   const nextTargetPiece = style.keyPieces?.find((p) => !scannedCategories.includes(p.category)) || style.keyPieces?.[0];
 
   const captureFrame = () => {
-    if (!videoRef.current) return null;
-    const video = videoRef.current;
-    const canvas = canvasRef.current || document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
+    // 1. Try Vonage Video Publisher snapshot API
+    if (vonagePublisherRef.current && typeof vonagePublisherRef.current.getImgData === "function") {
+      try {
+        const vonageImg = vonagePublisherRef.current.getImgData();
+        if (vonageImg && vonageImg.length > 100) {
+          return vonageImg.startsWith("data:") ? vonageImg : `data:image/png;base64,${vonageImg}`;
+        }
+      } catch (err) {
+        console.warn("Vonage getImgData failed, trying video element:", err);
+      }
+    }
+
+    // 2. Try Vonage container video element
+    const vonageVideoElem = vonageContainerRef.current?.querySelector("video");
+    const targetVideo = vonageVideoElem || videoRef.current;
+
+    if (targetVideo) {
+      const canvas = canvasRef.current || document.createElement("canvas");
+      canvas.width = targetVideo.videoWidth || 640;
+      canvas.height = targetVideo.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(targetVideo, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    }
+
+    return null;
   };
 
   const processGarmentImage = async (dataUrl) => {
@@ -268,8 +370,14 @@ export default function CameraScannerScreen({
       {/* Main Camera Viewfinder Card */}
       <div className="relative rounded-3xl overflow-hidden bg-slate-900 aspect-[3/4] sm:aspect-[4/3] max-h-[500px] flex items-center justify-center shadow-2xl border-4 border-white">
         
-        {/* Live video */}
-        {!cameraError ? (
+        {/* Vonage Video Publisher Container */}
+        <div
+          ref={vonageContainerRef}
+          className={`w-full h-full object-cover absolute inset-0 ${isVonageActive ? "block" : "hidden"}`}
+        />
+
+        {/* Fallback Live Video Stream */}
+        {!isVonageActive && !cameraError && (
           <video
             ref={videoRef}
             autoPlay
@@ -277,8 +385,11 @@ export default function CameraScannerScreen({
             muted
             className="w-full h-full object-cover"
           />
-        ) : (
-          <div className="p-8 text-center max-w-sm space-y-4 text-white">
+        )}
+
+        {/* Camera Error / Photo Capture Fallback */}
+        {cameraError && !isVonageActive && (
+          <div className="p-8 text-center max-w-sm space-y-4 text-white z-10">
             <div className="w-16 h-16 rounded-3xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400 mx-auto">
               <Camera className="w-8 h-8" />
             </div>
@@ -308,12 +419,12 @@ export default function CameraScannerScreen({
         )}
 
         {/* Viewfinder Target Overlays */}
-        {!cameraError && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6">
+        {(!cameraError || isVonageActive) && (
+          <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 z-10">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-[11px] font-bold text-white">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Live Wardrobe Scanner</span>
+                <span>{isVonageActive ? "⚡ Vonage Video Active" : "Live Wardrobe Scanner"}</span>
               </span>
 
               <button
